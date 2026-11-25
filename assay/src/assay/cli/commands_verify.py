@@ -33,11 +33,12 @@ _VERDICT_STYLES: Dict[DiffClassification, str] = {
 }
 
 
-def parse_ignore_paths(ignore_path: Optional[str]) -> List[str]:
-    """Parse comma-separated ``--ignore-path`` values into a clean list."""
+def parse_ignore_paths(ignore_path: Optional[str | List[str]]) -> List[str]:
+    """Parse repeated or comma-separated ``--ignore-path`` values."""
     if not ignore_path:
         return []
-    return [item.strip() for item in ignore_path.split(",") if item.strip()]
+    values = [ignore_path] if isinstance(ignore_path, str) else ignore_path
+    return [item.strip() for value in values for item in value.split(",") if item.strip()]
 
 
 def _format_delta_line(interaction_id: str, delta: FieldDelta) -> str:
@@ -170,7 +171,7 @@ def run_verify_command(
     recording: str,
     baseline: str,
     candidate: str,
-    ignore_path: Optional[str] = None,
+    ignore_path: Optional[str | List[str]] = None,
     concurrency: int = 1,
 ) -> None:
     """Replay against baseline and candidate, compare responses, and render report.

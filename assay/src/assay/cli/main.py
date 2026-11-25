@@ -219,11 +219,11 @@ def verify(
         "-c",
         help="Candidate service URL to verify against the baseline.",
     ),
-    ignore_path: Optional[str] = typer.Option(
+    ignore_path: Optional[List[str]] = typer.Option(
         None,
         "--ignore-path",
         "-i",
-        help="Comma-separated JSONPath fields to ignore (e.g. '$.created_at,$.session_id').",
+        help="JSONPath field to ignore; repeat for multiple fields.",
     ),
     concurrency: int = typer.Option(
         1,

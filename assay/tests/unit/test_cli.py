@@ -138,7 +138,9 @@ def test_cli_record_replay_verify_and_recordings_list(
             "--candidate",
             "http://127.0.0.1:8002",
             "--ignore-path",
-            "$.created_at,$.id",
+            "$.created_at",
+            "--ignore-path",
+            "$.id",
         ],
     )
     assert verify_res.exit_code == 0
@@ -146,7 +148,7 @@ def test_cli_record_replay_verify_and_recordings_list(
         recording="sample.json",
         baseline="http://127.0.0.1:8001",
         candidate="http://127.0.0.1:8002",
-        ignore_path="$.created_at,$.id",
+        ignore_path=["$.created_at", "$.id"],
         concurrency=1,
     )
 

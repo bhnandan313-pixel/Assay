@@ -23,7 +23,7 @@ Empty bodies are stored as `null`. Text payloads are decoded using the response/
 
 ## Redaction Rules
 
-Before any interaction is stored in memory or flushed to disk, `Redactor` scrubs sensitive data using the configured field list in `.assay.yaml` (defaulting to `Authorization`, `Cookie`, `Set-Cookie`, `password`, `secret`, `token`, `credit_card`):
+Before any interaction is stored in memory or flushed to disk, `Redactor` scrubs sensitive data using the configured field list in `.assay.yaml` (defaulting to `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, `password`, `secret`, `token`, `credit_card`, `cvv`, and `number`):
 
 1. **Headers:** Matched case-insensitively; values are replaced with `"[REDACTED]"`.
 2. **JSON Bodies (`application/json` / `*+json`):** Parsed and walked recursively across nested objects and arrays; matching keys (case-insensitive) have their values replaced with `"[REDACTED]"`.

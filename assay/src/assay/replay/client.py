@@ -190,6 +190,18 @@ class ReplayClient:
                 content_type=resp_content_type,
                 elapsed_ms=elapsed_ms,
             )
+            server_error = response.status_code >= 500
+            error_message = (
+                f"HTTPStatusError: server returned HTTP {response.status_code}"
+                if server_error
+                else None
+            )
+            if server_error:
+                logger.warning(
+                    "Replay received server error for interaction %s: HTTP %s",
+                    interaction.interaction_id,
+                    response.status_code,
+                )
             return ReplayExecutionPair(
                 interaction_id=interaction.interaction_id,
                 recorded_at=interaction.recorded_at,
@@ -198,8 +210,8 @@ class ReplayClient:
                 replayed_response=replayed_response,
                 replayed_at=replayed_at,
                 duration_ms=elapsed_ms,
-                error_message=None,
-                is_success=True,
+                error_message=error_message,
+                is_success=not server_error,
             )
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError, OSError) as exc:
             elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)

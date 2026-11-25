@@ -16,10 +16,13 @@ DEFAULT_REDACTION_FIELDS: list[str] = [
     "Authorization",
     "Cookie",
     "Set-Cookie",
+    "X-Api-Key",
     "password",
     "secret",
     "token",
     "credit_card",
+    "cvv",
+    "number",
 ]
 
 

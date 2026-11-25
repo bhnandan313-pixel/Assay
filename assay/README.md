@@ -18,8 +18,8 @@ Assay is a local-first behavioral verification runtime designed for software tea
 
 ## Key Features
 
-- **Transparent Recording Proxy (`assay record`):** Async `aiohttp` reverse proxy that captures HTTP interactions and redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`) and JSON/form fields (`password`, `token`, `secret`, `credit_card`) before touching disk.
-- **Resilient Async Replay (`assay replay`):** Reconstructs recorded requests via `httpx` with sequential or bounded-concurrency execution, dynamic header overrides, and graceful timeout/connection-failure tracking.
+- **Transparent Recording Proxy (`assay record`):** Async `aiohttp` reverse proxy that captures HTTP interactions and redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`) and JSON/form fields (`password`, `token`, `secret`, `credit_card`, `cvv`, `number`) before touching disk.
+- **Resilient Async Replay (`assay replay`):** Reconstructs recorded requests via `httpx` with sequential or bounded-concurrency execution, dynamic header overrides, and graceful HTTP 5xx, timeout, and connection-failure tracking.
 - **Structural JSON Diffing (`assay verify`):** Deep comparison of status codes, monitored headers, nested JSON structures, and type mismatches (`"21"` vs `21`), with JSONPath ignore masks (`$.transaction_id`, `$.items[*].id`) for naturally dynamic fields.
 - **Cryptographic Attestation (`assay verify-evidence`):** Produces tamper-evident `evidence_<id>.json` bundles signed with Ed25519 keys stored in `.assay/keys/`.
 
@@ -60,7 +60,8 @@ assay verify \
   --recording .assay/sessions/session_demo.json \
   --baseline http://localhost:8000 \
   --candidate http://localhost:8001 \
-  --ignore-path "$.transaction_id"
+  --ignore-path "$.transaction_id" \
+  --ignore-path "$.updated_at"
 ```
 
 ### 5. Independently Verify Signed Evidence

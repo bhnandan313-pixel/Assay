@@ -159,9 +159,11 @@ async def test_replay_runner_recovers_from_errors_and_continues(tmp_path: Path) 
 
     pair_504, pair_conn, pair_hang, pair_ok = persisted.execution_pairs
 
-    assert pair_504.is_success is True
+    assert pair_504.is_success is False
     assert pair_504.replayed_response is not None
     assert pair_504.replayed_response.status_code == 504
+    assert pair_504.error_message is not None
+    assert "HTTP 504" in pair_504.error_message
 
     assert pair_conn.is_success is False
     assert pair_conn.replayed_response is None
