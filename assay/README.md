@@ -2,4 +2,120 @@
 
 **The Verification Runtime for Agent-Written Code**
 
-Assay records HTTP workloads, replays them against baseline and candidate services, diffs responses, and produces cryptographic attestations of behavioral equivalence.
+[![CI](https://github.com/assay-runtime/assay/actions/workflows/ci.yml/badge.svg)](https://github.com/assay-runtime/assay/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
+Assay is a local-first behavioral verification runtime designed for software teams shipping agent-written or rapidly refactored HTTP services. Instead of trusting self-reported unit tests alone, Assay captures real HTTP workloads, replays them against baseline and candidate deployments, performs structural JSON differential analysis, and emits a cryptographically signed attestation bundle.
+
+### Core Principles
+
+- **Independent Verification:** Verification runs outside the application and outside the coding agent's own test harness.
+- **Black-Box Execution:** Services are evaluated through their real HTTP interfaces—status codes, headers, and serialized JSON payloads.
+- **Signed Evidence:** Every verification run produces a canonicalized SHA-256 + Ed25519 signed `EvidenceBundle` that can be audited independently in CI or compliance pipelines.
+
+---
+
+## Key Features
+
+- **Transparent Recording Proxy (`assay record`):** Async `aiohttp` reverse proxy that captures HTTP interactions and redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`) and JSON/form fields (`password`, `token`, `secret`, `credit_card`) before touching disk.
+- **Resilient Async Replay (`assay replay`):** Reconstructs recorded requests via `httpx` with sequential or bounded-concurrency execution, dynamic header overrides, and graceful timeout/connection-failure tracking.
+- **Structural JSON Diffing (`assay verify`):** Deep comparison of status codes, monitored headers, nested JSON structures, and type mismatches (`"21"` vs `21`), with JSONPath ignore masks (`$.transaction_id`, `$.items[*].id`) for naturally dynamic fields.
+- **Cryptographic Attestation (`assay verify-evidence`):** Produces tamper-evident `evidence_<id>.json` bundles signed with Ed25519 keys stored in `.assay/keys/`.
+
+---
+
+## Quickstart Guide
+
+### 1. Install Assay
+
+```bash
+pip install assay-runtime
+```
+
+### 2. Initialize Configuration and Signing Keys
+
+```bash
+assay init
+```
+
+This creates `.assay.yaml`, initializes `.assay/sessions/` and `.assay/keys/`, and generates an Ed25519 signing key-pair.
+
+### 3. Record a Baseline Workload
+
+Start the Assay recording proxy in front of your baseline service (e.g. running on port `8000`):
+
+```bash
+assay record --target http://localhost:8000 --port 9000 --session demo
+```
+
+Send traffic to `http://localhost:9000`. Press `Ctrl+C` when finished to flush `.assay/sessions/session_demo.json`.
+
+### 4. Verify Candidate vs. Baseline
+
+Run the full Replay → Diff → Attest pipeline comparing your baseline (`8000`) and candidate (`8001`):
+
+```bash
+assay verify \
+  --recording .assay/sessions/session_demo.json \
+  --baseline http://localhost:8000 \
+  --candidate http://localhost:8001 \
+  --ignore-path "$.transaction_id"
+```
+
+### 5. Independently Verify Signed Evidence
+
+```bash
+assay verify-evidence --bundle .assay/evidence/evidence_<verification_id>.json
+```
+
+---
+
+## Architecture
+
+```text
+  Client Traffic
+        │
+        ▼
+┌───────────────────┐     Redacts Secrets     ┌─────────────────────────┐
+│  assay record     │ ──────────────────────► │ .assay/sessions/*.json  │
+│  (Async Proxy)    │                         └───────────┬─────────────┘
+└───────────────────┘                                     │
+                                                          ▼
+┌───────────────────┐     Dual Replay         ┌─────────────────────────┐
+│ Baseline (v1)     │ ◄────────────────────── │  assay verify           │
+│ Candidate (v2)    │ ◄────────────────────── │  (ReplayRunner)         │
+└────────┬──────────┘                         └───────────┬─────────────┘
+         │                                                │
+         ▼                                                ▼
+┌───────────────────┐     SHA-256 + Ed25519   ┌─────────────────────────┐
+│ Differential      │ ──────────────────────► │ .assay/evidence/        │
+│ Comparator        │                         │ evidence_<id>.json      │
+└───────────────────┘                         └─────────────────────────┘
+```
+
+For deeper technical details, see:
+- [Architecture Specification](docs/architecture.md)
+- [Recording Format & Redaction](docs/recording-format.md)
+- [Determinism Roadmap](docs/determinism-roadmap.md)
+- [Release Checklist](docs/release-checklist.md)
+
+---
+
+## Known Limitations (V1 vs. V2 Roadmap)
+
+**What V1 Does Today:**
+- Request-level HTTP recording, redaction, replay, and structural JSON/text diffing.
+- JSONPath ignore masks for dynamic values such as timestamps and UUIDs.
+- Local Ed25519 attestation over verification manifests and delta hashes.
+
+**Deferred to V2:**
+- **Database State Virtualization:** Automatic PostgreSQL/SQLite snapshot and transaction rollback between replay runs.
+- **Outgoing Dependency Mocking:** Intercepting and virtualizing outbound third-party HTTP calls made by the service under test.
+- **Isolated Runtime Sandboxing:** VM/container-level execution with virtual clocks (`faketime`) and seeded PRNGs.
+
+---
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) for full terms.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -16,7 +16,6 @@ from assay.attest.signer import (
     KeyStore,
     canonicalize_json,
     generate_key_pair,
-    sign_manifest,
     verify_manifest,
 )
 from assay.cli.main import app
@@ -26,7 +25,6 @@ from assay.models.diff import (
     InteractionDiff,
     SessionDiffReport,
 )
-from assay.models.evidence import EvidenceBundle
 
 runner = CliRunner()
 

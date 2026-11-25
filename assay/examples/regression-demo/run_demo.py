@@ -239,7 +239,10 @@ def run_demo(
             d for d in bundle.deltas if d.classification == DiffClassification.CHANGED
         ]
         assert len(changed_deltas) == 3
-        assert any(d.status_code_changed and d.old_status == 201 and d.new_status == 200 for d in changed_deltas)
+        assert any(
+            d.status_code_changed and d.old_status == 201 and d.new_status == 200
+            for d in changed_deltas
+        )
 
         all_delta_paths = [
             fd.path for d in bundle.deltas for fd in d.body_diffs
