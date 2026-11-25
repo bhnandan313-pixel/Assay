@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -40,7 +40,7 @@ class StorageSettings(BaseModel):
 
 
 class NetworkSettings(BaseModel):
-    """Networking and reverse-proxy configuration parameters."""
+    """Networking and reverse‑proxy configuration parameters."""
 
     timeout_seconds: float = Field(
         default=10.0,
@@ -50,13 +50,26 @@ class NetworkSettings(BaseModel):
     proxy_host: str = Field(
         default="127.0.0.1",
         min_length=1,
-        description="Host interface for the recording reverse-proxy server.",
+        description="Host interface for the recording reverse‑proxy server.",
     )
     proxy_port: int = Field(
         default=9000,
         ge=1,
         le=65535,
-        description="TCP port for the recording reverse-proxy server.",
+        description="TCP port for the recording reverse‑proxy server.",
+    )
+    # New dual‑routing settings
+    backend_target: str = Field(
+        default="http://localhost:5000",
+        description="Upstream URL for backend API traffic.",
+    )
+    frontend_target: Optional[str] = Field(
+        default="http://localhost:5173",
+        description="Upstream URL for frontend static assets/UI traffic. Optional.",
+    )
+    api_prefixes: List[str] = Field(
+        default_factory=lambda: ["/api", "/auth", "/graphql", "/health"],
+        description="Path prefixes that identify API requests.",
     )
     max_retries: int = Field(
         default=3,
@@ -68,7 +81,6 @@ class NetworkSettings(BaseModel):
         ge=0.0,
         description="Base exponential backoff factor in seconds between retries.",
     )
-
 
 class RedactionSettings(BaseModel):
     """Sensitive field redaction rules applied during recording."""
@@ -133,6 +145,9 @@ def load_settings(config_path: Path | None = None) -> AssaySettings:
         Validated ``AssaySettings`` instance.
     """
     return AssaySettings.from_yaml(config_path=config_path)
+
+# Ensure Pydantic models are fully built after dynamic field additions
+AssaySettings.model_rebuild()
 
 
 def write_default_config(

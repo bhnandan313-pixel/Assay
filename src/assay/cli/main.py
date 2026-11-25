@@ -23,6 +23,7 @@ from assay.config.settings import (
     write_default_config,
 )
 from assay.storage.session_store import SessionStore
+from assay.cli.dashboard import start_dashboard
 
 app = typer.Typer(
     name="assay",
@@ -339,6 +340,36 @@ def verify_evidence(
     """Verify the cryptographic integrity of a signed evidence bundle."""
     run_verify_evidence_command(bundle=bundle, public_key=public_key)
 
+
+from assay.cli.dashboard import start_dashboard
+
+
+@app.command()
+def dashboard(
+    port: int = typer.Option(
+        9100,
+        "--port",
+        "-p",
+        help="Local port for the dashboard web UI.",
+    ),
+) -> None:
+    """Launch the interactive Assay local dashboard.
+
+    The dashboard runs a FastAPI server in a background thread and opens the
+    default web browser automatically. Press Ctrl+C in this terminal to stop.
+    """
+    # Render a friendly Rich panel before starting.
+    panel_text = (
+        "╭────────────────────────── Assay Local Dashboard ───────────────────────────╮\n"
+        f"│ ✔️ Dashboard Live:   http://localhost:{port}                                 │\n"
+        "│ 🔑 Encryption Mode:  Local Keypair Verified                               │\n"
+        "│                                                                            │\n"
+        "│ ➜ Real-time traffic, visual diffing, and key signing are now active.       │\n"
+        "│   Press Ctrl+C in this terminal window to stop the dashboard server.       │\n"
+        "╰────────────────────────────────────────────────────────────────────────────╯"
+    )
+    console.print(panel_text)
+    start_dashboard(port=port)
 
 if __name__ == "__main__":
     app()

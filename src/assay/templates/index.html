@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assay Local Dashboard</title>
+  <!-- Tailwind CSS (pre‑compiled) -->
+  <link href="/static/style.css" rel="stylesheet" />
+  <!-- Alpine.js for interactivity -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans" x-data="dashboard()">
+  <!-- Sidebar navigation -->
+  <div class="flex h-screen">
+    <nav class="w-64 bg-white shadow-md p-4">
+      <h2 class="text-xl font-bold mb-4">Assay Dashboard</h2>
+      <ul class="space-y-2">
+        <li><a href="#" @click.prevent="tab='recordings'" :class="{'text-blue-600': tab==='recordings'}" class="block py-2 px-3 rounded hover:bg-gray-200">Recordings</a></li>
+        <li><a href="#" @click.prevent="tab='verifier'" :class="{'text-blue-600': tab==='verifier'}" class="block py-2 px-3 rounded hover:bg-gray-200">Verifier Engine</a></li>
+        <li><a href="#" @click.prevent="tab='redaction'" :class="{'text-blue-600': tab==='redaction'}" class="block py-2 px-3 rounded hover:bg-gray-200">Redaction Filters</a></li>
+        <li><a href="#" @click.prevent="tab='evidence'" :class="{'text-blue-600': tab==='evidence'}" class="block py-2 px-3 rounded hover:bg-gray-200">Evidence Keys</a></li>
+      </ul>
+    </nav>
+    <!-- Main content area -->
+    <main class="flex-1 overflow-auto p-6">
+      <!-- Recordings Tab -->
+      <section x-show="tab==='recordings'" class="space-y-4">
+        <div class="flex items-center space-x-4">
+          <button @click="startRecording()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" :disabled="recording">Start Recording</button>
+          <button @click="stopRecording()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" :disabled="!recording">Stop Recording</button>
+        </div>
+        <div class="border rounded bg-white p-4 max-h-96 overflow-y-auto">
+          <template x-for="log in logs" :key="log.id">
+            <div class="flex items-center space-x-2 py-1">
+              <span :class="statusClass(log.status)" class="px-2 py-0.5 text-xs rounded">{{ log.status }}</span>
+              <code class="text-sm">{{ log.method }} {{ log.path }}</code>
+            </div>
+          </template>
+          <div x-show="logs.length===0" class="text-gray-500">No logs yet.</div>
+        </div>
+      </section>
+      <!-- Verifier Engine Tab -->
+      <section x-show="tab==='verifier'" class="space-y-4">
+        <div class="flex items-center space-x-4">
+          <select x-model="selectedSession" class="border rounded p-2">
+            <template x-for="s in sessions" :key="s.name">
+              <option :value="s.name">{{ s.name }}</option>
+            </template>
+          </select>
+          <input type="text" placeholder="Baseline URL" x-model="baselineUrl" class="border rounded p-2"/>
+          <input type="text" placeholder="Candidate URL" x-model="candidateUrl" class="border rounded p-2"/>
+          <button @click="runVerify()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Verify</button>
+        </div>
+        <pre x-show="verifyResult" class="bg-gray-800 text-green-200 p-4 rounded overflow-x-auto">{{ verifyResult }}</pre>
+      </section>
+      <!-- Redaction Filters Tab -->
+      <section x-show="tab==='redaction'" class="space-y-4">
+        <div>
+          <h3 class="font-semibold mb-2">Current Redaction Keys</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <template x-for="k in redactionKeys" :key="k">
+              <li>{{ k }}</li>
+            </template>
+          </ul>
+        </div>
+        <div class="flex items-center space-x-2">
+          <input type="text" placeholder="Add key" x-model="newKey" class="border rounded p-2"/>
+          <button @click="addKey()" class="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">Add</button>
+        </div>
+      </section>
+      <!-- Evidence Keys Tab -->
+      <section x-show="tab==='evidence'" class="space-y-4">
+        <p class="text-gray-600">(Placeholder) Future UI for viewing signing keys and bundle attestations.</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    function dashboard() {
+      return {
+        tab: 'recordings',
+        recording: false,
+        logs: [],
+        logId: 0,
+        sessions: [],
+        redactionKeys: [],
+        newKey: '',
+        selectedSession: null,
+        baselineUrl: '',
+        candidateUrl: '',
+        verifyResult: '',
+        // -----------------------------------------------------------------
+        // Helper to map HTTP status code to colour class
+        statusClass(status) {
+          if (status.startsWith('2')) return 'bg-green-200 text-green-800';
+          if (status.startsWith('4')) return 'bg-yellow-200 text-yellow-800';
+          if (status.startsWith('5')) return 'bg-red-200 text-red-800';
+          return 'bg-gray-200 text-gray-800';
+        },
+        // -----------------------------------------------------------------
+        async startRecording() {
+          try {
+            const resp = await fetch('/api/record/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ backend: 'http://localhost:5000', frontend: null, session: null })
+            });
+            if (!resp.ok) throw new Error('Failed to start');
+            this.recording = true;
+            this.pollLogs();
+          } catch (e) { alert(e); }
+        },
+        async stopRecording() {
+          try {
+            const resp = await fetch('/api/record/stop', { method: 'POST' });
+            if (!resp.ok) throw new Error('Failed to stop');
+            this.recording = false;
+          } catch (e) { alert(e); }
+        },
+        async pollLogs() {
+          if (!this.recording) return;
+          // Simple poll every 2s – in a real app use SSE.
+          const resp = await fetch('/api/sessions');
+          const data = await resp.json();
+          this.sessions = data.sessions;
+          // Append dummy log entry for demo purposes
+          this.logs.push({id: this.logId++, method: 'GET', path: '/api/example', status: '200'});
+          setTimeout(() => this.pollLogs(), 2000);
+        },
+        async loadRedactionKeys() {
+          // Load current keys from server
+          const resp = await fetch('/api/redact/rules'); // placeholder GET not implemented
+          if (resp.ok) {
+            const d = await resp.json();
+            this.redactionKeys = d.keys || [];
+          }
+        },
+        async addKey() {
+          if (!this.newKey) return;
+          const updated = [...this.redactionKeys, this.newKey];
+          const resp = await fetch('/api/redact/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keys: updated })
+          });
+          if (resp.ok) {
+            this.redactionKeys = updated;
+            this.newKey = '';
+          } else { alert('Failed to update'); }
+        },
+        async runVerify() {
+          if (!this.selectedSession) { alert('Select a session'); return; }
+          const resp = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: this.selectedSession, baseline: this.baselineUrl, candidate: this.candidateUrl })
+          });
+          if (resp.ok) {
+            const d = await resp.json();
+            this.verifyResult = JSON.stringify(d, null, 2);
+          } else { alert('Verification failed'); }
+        }
+      };
+    }
+  </script>
+</body>
+</html>
