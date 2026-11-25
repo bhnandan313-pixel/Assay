@@ -11,11 +11,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from assay.attest.bundle import EvidenceGenerator, verify_evidence_bundle
+from assay.attest.signer import KeyStore
 from assay.cli.commands_record import validate_target_url
 from assay.config.settings import load_settings
 from assay.diff.comparator import DifferentialComparator
 from assay.diff.session_comparator import SessionComparisonRunner
 from assay.models.diff import DiffClassification, FieldDelta, SessionDiffReport
+from assay.models.evidence import EvidenceBundle
 from assay.models.recording import RecordedInteraction, RecordingSession
 from assay.replay.runner import ReplayRunner
 from assay.storage.session_store import SessionStore
@@ -224,3 +227,58 @@ def run_verify_command(
     )
     diff_report, report_path = runner.compare_reports(baseline_report, candidate_report)
     _render_verification_results(session, diff_report, report_path)
+
+    key_store = KeyStore(settings.storage.keys_dir)
+    key_store.ensure_keys()
+    private_key_pem = key_store.load_private_key()
+    public_key_hex = key_store.load_public_key_hex()
+
+    evidence_dir = assay_root / "evidence"
+    evidence_gen = EvidenceGenerator(evidence_dir=evidence_dir)
+    evidence_gen.create_signed_bundle(
+        verification_id=diff_report.verification_id,
+        session_diff_report=diff_report,
+        private_key_pem=private_key_pem,
+        public_key_hex=public_key_hex,
+    )
+    evidence_path = evidence_dir / f"evidence_{diff_report.verification_id}.json"
+    console.print(
+        f"[bold green]📜 Evidence bundle successfully generated and signed: "
+        f"{evidence_path}[/bold green]"
+    )
+
+
+def run_verify_evidence_command(
+    bundle: Path,
+    public_key: Optional[str] = None,
+) -> None:
+    """Load an ``EvidenceBundle`` and verify its hash and Ed25519 signature."""
+    if not bundle.is_file():
+        console.print(f"[bold red]❌ Evidence bundle not found:[/bold red] {bundle}")
+        raise typer.Exit(code=1)
+
+    try:
+        loaded_bundle = EvidenceBundle.model_validate_json(
+            bundle.read_text(encoding="utf-8")
+        )
+    except Exception as exc:
+        console.print(f"[bold red]❌ Invalid evidence bundle format:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    is_valid, reason = verify_evidence_bundle(loaded_bundle, public_key_hex=public_key)
+    if is_valid:
+        ts_str = loaded_bundle.manifest.timestamp.isoformat()
+        console.print(
+            Panel.fit(
+                f"[bold green]✅ EVIDENCE VERIFIED:[/bold green] This run occurred on "
+                f"[bold]{ts_str}[/bold] and the behavioral outcomes are untampered.",
+                border_style="green",
+            )
+        )
+        return
+
+    console.print(
+        f"[bold red]❌ EVIDENCE COMPROMISED:[/bold red] "
+        f"Cryptographic signature verification failed! ({reason})"
+    )
+    raise typer.Exit(code=1)

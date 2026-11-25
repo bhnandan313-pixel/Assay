@@ -40,6 +40,16 @@ class InteractionDiff(BaseModel):
     error_message: Optional[str] = None
 
 
+class VerificationSummary(BaseModel):
+    """Summary counts of verification outcomes."""
+
+    total: int = 0
+    unchanged: int = 0
+    changed: int = 0
+    failed: int = 0
+    inconclusive: int = 0
+
+
 class SessionDiffReport(BaseModel):
     """Aggregated differential report across an entire verification session."""
 

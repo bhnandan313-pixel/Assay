@@ -19,7 +19,7 @@ def test_cli_help_lists_subcommands() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command_name in ("init", "record", "recordings", "replay", "verify"):
+    for command_name in ("init", "record", "recordings", "replay", "verify", "verify-evidence"):
         assert command_name in result.stdout
 
 

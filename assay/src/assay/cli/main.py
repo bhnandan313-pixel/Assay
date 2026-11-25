@@ -6,15 +6,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import typer
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from assay.attest.signer import KeyStore
 from assay.cli.commands_record import run_record_command
 from assay.cli.commands_replay import run_replay_command
-from assay.cli.commands_verify import run_verify_command
+from assay.cli.commands_verify import run_verify_command, run_verify_evidence_command
 from assay.config.settings import (
     DEFAULT_CONFIG_FILENAME,
     AssaySettings,
@@ -36,39 +35,6 @@ recordings_app = typer.Typer(
 app.add_typer(recordings_app, name="recordings")
 
 console = Console()
-
-
-def generate_ed25519_keypair(keys_dir: Path, force: bool = False) -> tuple[Path, Path]:
-    """Generate an Ed25519 signing key-pair in PEM format.
-
-    Args:
-        keys_dir: Directory where ``private_key.pem`` and ``public_key.pem`` are saved.
-        force: Overwrite existing key files if present.
-
-    Returns:
-        Tuple of ``(private_key_path, public_key_path)``.
-    """
-    keys_dir.mkdir(parents=True, exist_ok=True)
-    private_key_path = keys_dir / "private_key.pem"
-    public_key_path = keys_dir / "public_key.pem"
-
-    if not force and (private_key_path.exists() or public_key_path.exists()):
-        return private_key_path, public_key_path
-
-    private_key = Ed25519PrivateKey.generate()
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-
-    private_key_path.write_bytes(private_pem)
-    public_key_path.write_bytes(public_pem)
-    return private_key_path, public_key_path
 
 
 def initialize_workspace(
@@ -97,10 +63,13 @@ def initialize_workspace(
     if force or not config_path.exists():
         write_default_config(config_path=config_path, settings=settings)
 
-    private_key_path, public_key_path = generate_ed25519_keypair(
-        keys_dir=settings.storage.keys_dir,
-        force=force,
-    )
+    key_store = KeyStore(settings.storage.keys_dir)
+    created_new, private_key_path, public_key_path = key_store.ensure_keys(force=force)
+    if created_new:
+        console.print(
+            f"[bold cyan]🔑 Generated cryptographic keypair at "
+            f"{settings.storage.keys_dir}[/bold cyan]"
+        )
     return config_path, private_key_path, public_key_path
 
 
@@ -271,6 +240,25 @@ def verify(
         ignore_path=ignore_path,
         concurrency=concurrency,
     )
+
+
+@app.command("verify-evidence")
+def verify_evidence(
+    bundle: Path = typer.Option(
+        ...,
+        "--bundle",
+        "-b",
+        help="Path to the signed EvidenceBundle JSON file.",
+    ),
+    public_key: Optional[str] = typer.Option(
+        None,
+        "--public-key",
+        "-k",
+        help="Optional hex-encoded Ed25519 public key overriding the bundle key.",
+    ),
+) -> None:
+    """Verify the cryptographic integrity of a signed evidence bundle."""
+    run_verify_evidence_command(bundle=bundle, public_key=public_key)
 
 
 if __name__ == "__main__":
