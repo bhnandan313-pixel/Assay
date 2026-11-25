@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -41,11 +42,24 @@ def validate_target_url(target: str) -> str:
 
 
 async def _serve_proxy(proxy: RecordingProxyServer) -> Optional[Path]:
-    """Run the recording proxy until cancelled and flush on shutdown."""
+    """Run the recording proxy until cancelled or signalled and flush on shutdown."""
     await proxy.start()
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    def _request_stop(*_: object) -> None:
+        loop.call_soon_threadsafe(stop_event.set)
+
+    for sig_name in ("SIGINT", "SIGTERM", "SIGBREAK"):
+        sig = getattr(signal, sig_name, None)
+        if sig is not None:
+            try:
+                signal.signal(sig, _request_stop)
+            except (ValueError, OSError):
+                pass
+
     try:
-        while True:
-            await asyncio.sleep(3600)
+        await stop_event.wait()
     except asyncio.CancelledError:
         pass
     finally:
