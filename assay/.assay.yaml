@@ -1,0 +1,16 @@
+storage:
+  sessions_dir: C:\Users\Nandan B H\Assay\Assay\assay\.assay\sessions
+  keys_dir: C:\Users\Nandan B H\Assay\Assay\assay\.assay\keys
+network:
+  timeout_seconds: 10.0
+  proxy_host: 127.0.0.1
+  proxy_port: 9000
+redaction:
+  fields:
+  - Authorization
+  - Cookie
+  - Set-Cookie
+  - password
+  - secret
+  - token
+  - credit_card
