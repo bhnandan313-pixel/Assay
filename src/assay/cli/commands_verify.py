@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from assay.attest.bundle import EvidenceGenerator, verify_evidence_bundle
 from assay.attest.signer import KeyStore
