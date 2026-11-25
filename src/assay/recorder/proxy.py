@@ -27,6 +27,8 @@ from assay.storage.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
 
+TRACE_HEADER_NAME = "X-Assay-Trace-ID"
+
 HOP_BY_HOP_HEADERS: frozenset[str] = frozenset(
     {
         "connection",
@@ -159,6 +161,7 @@ class RecordingProxyServer:
         resp_bytes: bytes,
         resp_content_type: Optional[str],
         elapsed_ms: float,
+        trace_id: Optional[str] = None,
     ) -> None:
         """Redact and append a captured interaction to the active session."""
         redacted_req_headers = self.redactor.redact_headers(raw_req_headers)
@@ -180,6 +183,7 @@ class RecordingProxyServer:
         interaction = RecordedInteraction(
             interaction_id=str(uuid.uuid4()),
             recorded_at=datetime.now(timezone.utc),
+            trace_id=trace_id,
             request=RecordedRequest(
                 method=method,
                 url=upstream_url,
@@ -188,6 +192,7 @@ class RecordingProxyServer:
                 headers=redacted_req_headers,
                 body=redacted_req_body,
                 content_type=req_content_type,
+                trace_id=trace_id,
             ),
             response=RecordedResponse(
                 status_code=status_code,
@@ -209,13 +214,18 @@ class RecordingProxyServer:
         req_bytes = await request.read()
         upstream_url = f"{self.target_url}{request.raw_path}"
 
+        raw_trace_id = request.headers.get(TRACE_HEADER_NAME)
+        trace_id = raw_trace_id.strip() if raw_trace_id and raw_trace_id.strip() else None
+
         raw_req_headers = [
-            HTTPHeader(name=k, value=v) for k, v in request.headers.items()
+            HTTPHeader(name=k, value=v)
+            for k, v in request.headers.items()
+            if k.lower() != TRACE_HEADER_NAME.lower()
         ]
         forward_headers = {
             k: v
             for k, v in request.headers.items()
-            if k.lower() not in HOP_BY_HOP_HEADERS
+            if k.lower() not in HOP_BY_HOP_HEADERS and k.lower() != TRACE_HEADER_NAME.lower()
         }
         req_content_type = request.headers.get("Content-Type")
         query_params = {k: v for k, v in parse_qsl(request.query_string)}
@@ -258,6 +268,7 @@ class RecordingProxyServer:
                 resp_bytes=resp_bytes,
                 resp_content_type=resp_content_type,
                 elapsed_ms=elapsed_ms,
+                trace_id=trace_id,
             )
         except Exception:
             logger.exception(

@@ -1,63 +1,87 @@
 # Contributing to Assay
 
-Thank you for your interest in contributing to **Assay — The Verification Runtime for Agent-Written Code**!
+We welcome contributions from the community! This guide walks you through setting up a development environment, running tests, and submitting pull requests.
 
-## Development Environment Setup
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Development Workflow](#development-workflow)
+- [Testing](#testing)
+- [Code Style & Linting](#code-style--linting)
+- [Documentation](#documentation)
+- [Submitting a Pull Request](#submitting-a-pull-request)
+- [Additional Resources](#additional-resources)
 
-Assay requires **Python 3.11+**.
+## Prerequisites
+- **Python** ≥ 3.11 (tested on 3.11 and 3.12)
+- **Git**
+- **Node.js** (optional, only needed for frontend examples)
+- **Playwright browsers** – installed via `playwright install chromium`
 
-1. Clone the repository and enter the project directory:
-   ```bash
-   git clone https://github.com/assay-runtime/assay.git
-   cd assay
-   ```
-
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   # Linux / macOS:
-   source .venv/bin/activate
-   # Windows PowerShell:
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-3. Install Assay in editable mode with all development and demo dependencies:
-   ```bash
-   pip install -e ".[dev]"
-   ```
-
-## Running Tests
-
-Run the full unit and integration test suite using `pytest`:
-
+## Setup
 ```bash
-pytest tests/ -v
+# Clone the repository
+git clone https://github.com/your-org/assay.git
+cd assay
+
+# Create a virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate  # on Windows
+# source .venv/bin/activate  # on Unix/macOS
+
+# Upgrade pip and install the package with development extras
+python -m pip install --upgrade pip
+pip install -e "[dev]"
+
+# Install Playwright browsers (required for UI recording/replay)
+playwright install chromium
 ```
 
-To run only unit tests or only integration tests:
+## Development Workflow
+1. **Create a branch** for your feature or bug fix:
+   ```bash
+   git checkout -b feature/awesome-feature
+   ```
+2. **Make changes** following the project's coding standards (see *Code Style & Linting*).
+3. **Run the test suite** frequently to ensure you haven't introduced regressions.
+4. **Commit** your changes with clear, prefixed messages (e.g., `feat: add UI recorder` or `fix: correct diff logic`).
+5. **Push** the branch and open a Pull Request against `main`.
 
+## Testing
 ```bash
-pytest tests/unit/ -v
-pytest tests/integration/ -v
+# Run the full test suite with verbose output
+pytest -vv
+
+# Run a subset of tests (optional)
+pytest tests/unit/test_diff.py
 ```
+All tests must pass on **both** Python 3.11 and 3.12. The CI workflow enforces this.
 
-## Code Quality & Formatting
-
-We use `ruff` for linting and import/style checks:
-
+## Code Style & Linting
+The project uses **Ruff** for linting and **Black** for formatting (optional). Before committing, run:
 ```bash
-ruff check .
+ruff check .          # Linting
+ruff check . --fix   # Auto‑fix simple issues
+black .               # Optional: format with Black
 ```
+The CI pipeline will reject any PR that fails linting.
 
-Please ensure all new modules include:
-- Strict Python type annotations (`from __future__ import annotations`).
-- Concise docstrings on public classes, functions, and Pydantic models.
-- Unit tests covering both happy paths and failure/edge cases.
+## Documentation
+Documentation lives under the `docs/` directory and is written in plain Markdown. When you add a new feature, please:
+- Update the relevant `docs/*.md` file with an overview and usage examples.
+- Keep diagrams ASCII‑based for easy rendering on GitHub.
+- Ensure any new public API is reflected in the generated reference documentation (if a docs generator is added in the future).
 
-## Pull Request Checklist
+## Submitting a Pull Request
+- **Title**: Use a concise, descriptive title prefixed with the appropriate tag (`feat:`, `fix:`, `docs:`).
+- **Description**: Explain the problem being solved, the approach taken, and any relevant screenshots or examples.
+- **Linked Issues**: Reference the Issue ID (e.g., `Closes #123`).
+- **Tests**: Include unit or integration tests that cover the new behavior.
+- **CI**: Ensure the GitHub Actions checks pass before requesting a review.
 
-Before opening a pull request, verify that:
-- [ ] `pytest tests/ -v` passes with zero failures or skipped assertions.
-- [ ] `ruff check .` reports no errors.
-- [ ] New CLI options or configuration fields are documented in `README.md` or `docs/`.
-- [ ] No sensitive credentials, private keys, or `.assay/` artifacts are committed.
+## Additional Resources
+- [Project Roadmap](README.md#roadmap)
+- [Architecture Overview](docs/architecture.md)
+- [Recording Format Specification](docs/recording-format.md)
+
+Thank you for helping make Assay better! 🚀

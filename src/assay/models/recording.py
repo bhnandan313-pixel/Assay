@@ -49,6 +49,16 @@ class HTTPHeader(BaseModel):
     value: str
 
 
+class BrowserAction(BaseModel):
+    """Captured frontend browser UI interaction event."""
+
+    action_type: str
+    selector: str
+    value: Optional[str] = None
+    timestamp_offset_ms: float = Field(ge=0.0)
+    trace_id: Optional[str] = None
+
+
 class RecordedRequest(BaseModel):
     """Captured inbound HTTP request metadata and payload."""
 
@@ -59,6 +69,7 @@ class RecordedRequest(BaseModel):
     headers: List[HTTPHeader] = Field(default_factory=list)
     body: Optional[str] = None
     content_type: Optional[str] = None
+    trace_id: Optional[str] = None
 
 
 class RecordedResponse(BaseModel):
@@ -78,13 +89,15 @@ class RecordedInteraction(BaseModel):
     recorded_at: datetime
     request: RecordedRequest
     response: RecordedResponse
+    trace_id: Optional[str] = None
 
 
 class RecordingSession(BaseModel):
-    """Collection of recorded HTTP interactions for a target service."""
+    """Collection of recorded browser actions and HTTP interactions for a target."""
 
-    version: str = "1.0.0"
+    version: str = "2.0.0"
     session_id: str
     target_url: str
     created_at: datetime
+    ui_actions: List[BrowserAction] = Field(default_factory=list)
     interactions: List[RecordedInteraction] = Field(default_factory=list)

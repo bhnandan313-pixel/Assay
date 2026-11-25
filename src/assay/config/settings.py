@@ -58,6 +58,16 @@ class NetworkSettings(BaseModel):
         le=65535,
         description="TCP port for the recording reverse-proxy server.",
     )
+    max_retries: int = Field(
+        default=3,
+        ge=0,
+        description="Maximum number of retries for transient HTTP replay failures.",
+    )
+    backoff_factor: float = Field(
+        default=0.5,
+        ge=0.0,
+        description="Base exponential backoff factor in seconds between retries.",
+    )
 
 
 class RedactionSettings(BaseModel):

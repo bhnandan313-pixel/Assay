@@ -16,8 +16,8 @@ from assay.attest.signer import KeyStore
 from assay.cli.commands_record import validate_target_url
 from assay.config.settings import load_settings
 from assay.diff.comparator import DifferentialComparator
-from assay.diff.session_comparator import SessionComparisonRunner
-from assay.models.diff import DiffClassification, FieldDelta, SessionDiffReport
+from assay.diff.session_comparator import UnifiedSessionComparator
+from assay.models.diff import DiffClassification, FieldDelta, SessionDiffReport, UIDelta
 from assay.models.evidence import EvidenceBundle
 from assay.models.recording import RecordedInteraction, RecordingSession
 from assay.replay.runner import ReplayRunner
@@ -42,23 +42,44 @@ def parse_ignore_paths(ignore_path: Optional[str | List[str]]) -> List[str]:
 
 
 def _format_delta_line(interaction_id: str, delta: FieldDelta) -> str:
-    """Format a ``FieldDelta`` for human-readable terminal display."""
+    """Format an API ``FieldDelta`` for human-readable terminal display."""
     if delta.change_type == "value_changed":
         return (
-            f"⚠️  [{interaction_id}] Field '{delta.path}' changed from "
-            f"{delta.old_value!r} to {delta.new_value!r}"
+            f'⚠️  [API REGRESSION] [{interaction_id}] Field "{delta.path}" changed from '
+            f"{delta.old_value!r} to {delta.new_value!r}."
         )
     if delta.change_type == "type_mismatch":
         return (
-            f"⚠️  [{interaction_id}] Field '{delta.path}' type mismatch: "
+            f'⚠️  [API REGRESSION] [{interaction_id}] Field "{delta.path}" type mismatch: '
             f"{delta.old_value!r} ({type(delta.old_value).__name__}) -> "
-            f"{delta.new_value!r} ({type(delta.new_value).__name__})"
+            f"{delta.new_value!r} ({type(delta.new_value).__name__})."
         )
     if delta.change_type == "item_added":
-        return f"⚠️  [{interaction_id}] Field '{delta.path}' added: {delta.new_value!r}"
+        return (
+            f'⚠️  [API REGRESSION] [{interaction_id}] Field "{delta.path}" added: '
+            f"{delta.new_value!r}."
+        )
     if delta.change_type == "item_removed":
-        return f"⚠️  [{interaction_id}] Field '{delta.path}' removed: {delta.old_value!r}"
-    return f"⚠️  [{interaction_id}] Field '{delta.path}' ({delta.change_type})"
+        return (
+            f'⚠️  [API REGRESSION] [{interaction_id}] Field "{delta.path}" removed: '
+            f"{delta.old_value!r}."
+        )
+    return f'⚠️  [API REGRESSION] [{interaction_id}] Field "{delta.path}" ({delta.change_type}).'
+
+
+def _format_ui_delta_line(ui_delta: UIDelta) -> str:
+    """Format a ``UIDelta`` regression for human-readable terminal display."""
+    expected = ui_delta.expected_state if ui_delta.expected_state is not None else "PRESENT"
+    actual = ui_delta.actual_state if ui_delta.actual_state is not None else "MISSING"
+    if ui_delta.change_type == "url_redirect_mismatch":
+        return (
+            f'⚠️  [UI REGRESSION] Selector "{ui_delta.selector}" route mismatch: '
+            f"expected {expected} but got {actual}."
+        )
+    return (
+        f'⚠️  [UI REGRESSION] Selector "{ui_delta.selector}" was expected to be '
+        f"{expected} but is {actual}."
+    )
 
 
 def _render_verification_results(
@@ -66,7 +87,7 @@ def _render_verification_results(
     diff_report: SessionDiffReport,
     report_path: Path,
 ) -> None:
-    """Render the Rich verification table and detailed delta sub-panel."""
+    """Render the dual-layer Rich verification table and detailed delta sub-panel."""
     by_id: Dict[str, RecordedInteraction] = {
         item.interaction_id: item for item in session.interactions
     }
@@ -76,45 +97,68 @@ def _render_verification_results(
         show_header=True,
         header_style="bold",
     )
-    table.add_column("Interaction ID", style="cyan")
-    table.add_column("Method", style="white")
-    table.add_column("Path", style="white")
+    table.add_column("#", style="dim", justify="right")
+    table.add_column("Step Type", style="magenta")
+    table.add_column("Target Selector / Path", style="white")
     table.add_column("Status Baseline", justify="right")
     table.add_column("Status Candidate", justify="right")
     table.add_column("Verdict", style="bold")
 
     detail_lines: List[str] = []
+    row_num = 0
 
     for delta in diff_report.deltas:
         interaction = by_id.get(delta.interaction_id)
-        method = interaction.request.method if interaction else "-"
-        path = interaction.request.path if interaction else "-"
-        old_status = str(delta.old_status) if delta.old_status is not None else "ERR"
-        new_status = str(delta.new_status) if delta.new_status is not None else "ERR"
-        style = _VERDICT_STYLES.get(delta.classification, "white")
+        if interaction is not None or delta.old_status is not None or delta.new_status is not None:
+            row_num += 1
+            method = interaction.request.method if interaction else "API"
+            path = interaction.request.path if interaction else delta.interaction_id
+            old_status = str(delta.old_status) if delta.old_status is not None else "ERR"
+            new_status = str(delta.new_status) if delta.new_status is not None else "ERR"
+            style = _VERDICT_STYLES.get(delta.classification, "white")
 
-        table.add_row(
-            delta.interaction_id[:12],
-            method,
-            path,
-            old_status,
-            new_status,
-            f"[{style}]{delta.classification.value}[/{style}]",
-            style=style if delta.classification != DiffClassification.UNCHANGED else None,
-        )
-
-        if delta.classification == DiffClassification.CHANGED:
-            if delta.status_code_changed:
-                detail_lines.append(
-                    f"⚠️  [{delta.interaction_id}] Status changed from "
-                    f"{delta.old_status} to {delta.new_status}"
-                )
-            for field_delta in delta.header_diffs + delta.body_diffs:
-                detail_lines.append(_format_delta_line(delta.interaction_id, field_delta))
-        elif delta.error_message:
-            detail_lines.append(
-                f"❌ [{delta.interaction_id}] {delta.classification.value}: {delta.error_message}"
+            table.add_row(
+                str(row_num),
+                f"API ({method})",
+                path,
+                old_status,
+                new_status,
+                f"[{style}]{delta.classification.value}[/{style}]",
+                style=style if delta.classification != DiffClassification.UNCHANGED else None,
             )
+
+            if delta.classification == DiffClassification.CHANGED:
+                if delta.status_code_changed:
+                    detail_lines.append(
+                        f"⚠️  [API REGRESSION] [{delta.interaction_id}] Status changed from "
+                        f"{delta.old_status} to {delta.new_status}."
+                    )
+                for field_delta in delta.header_diffs + delta.body_diffs:
+                    detail_lines.append(_format_delta_line(delta.interaction_id, field_delta))
+            elif delta.error_message:
+                detail_lines.append(
+                    f"❌ [{delta.interaction_id}] {delta.classification.value}: "
+                    f"{delta.error_message}"
+                )
+
+        for ui_delta in delta.ui_diffs:
+            row_num += 1
+            ui_verdict = (
+                DiffClassification.FAILED
+                if ui_delta.change_type in {"element_missing", "playback_error", "page_error"}
+                else DiffClassification.CHANGED
+            )
+            ui_style = _VERDICT_STYLES.get(ui_verdict, "yellow")
+            table.add_row(
+                str(row_num),
+                "UI",
+                ui_delta.selector,
+                str(ui_delta.expected_state or "OK"),
+                str(ui_delta.actual_state or "ERR"),
+                f"[{ui_style}]{ui_verdict.value}[/{ui_style}]",
+                style=ui_style,
+            )
+            detail_lines.append(_format_ui_delta_line(ui_delta))
 
     console.print(table)
 
@@ -128,10 +172,19 @@ def _render_verification_results(
         )
 
     console.print(
-        f"[bold]Summary:[/bold] {diff_report.unchanged_count} unchanged, "
+        f"[bold]API Summary:[/bold] {diff_report.unchanged_count} unchanged, "
         f"{diff_report.changed_count} changed, {diff_report.failed_count} failed, "
         f"{diff_report.inconclusive_count} inconclusive"
     )
+    if (
+        diff_report.ui_unchanged_count
+        or diff_report.ui_changed_count
+        or diff_report.ui_failed_count
+    ):
+        console.print(
+            f"[bold]UI Summary:[/bold] {diff_report.ui_unchanged_count} unchanged, "
+            f"{diff_report.ui_changed_count} changed, {diff_report.ui_failed_count} failed"
+        )
     console.print(f"[bold green]✔️ Verification report saved to {report_path}[/bold green]")
 
 
@@ -222,11 +275,15 @@ def run_verify_command(
     )
 
     comparator = DifferentialComparator(ignore_paths=ignore_patterns)
-    runner = SessionComparisonRunner(
-        comparator=comparator,
+    runner = UnifiedSessionComparator(
+        api_comparator=comparator,
         verifications_dir=verifications_dir,
     )
-    diff_report, report_path = runner.compare_reports(baseline_report, candidate_report)
+    diff_report, report_path = runner.compare_dual_runs(
+        baseline_report=baseline_report,
+        candidate_report=candidate_report,
+        baseline_ui_actions=session.ui_actions,
+    )
     _render_verification_results(session, diff_report, report_path)
 
     key_store = KeyStore(settings.storage.keys_dir)

@@ -17,8 +17,10 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from assay.browser.replayer import UIActionReplayer
 from assay.cli.commands_record import validate_target_url
 from assay.config.settings import load_settings
+from assay.models.diff import UIDelta
 from assay.models.replay import ReplayExecutionPair, ReplaySessionReport
 from assay.replay.runner import ReplayRunner
 from assay.storage.session_store import SessionStore
@@ -50,8 +52,13 @@ def parse_header_overrides(headers: Optional[List[str]]) -> Dict[str, str]:
     return parsed
 
 
-def _render_replay_summary(report: ReplaySessionReport, report_path: Path) -> None:
-    """Render a Rich summary table of replay execution results."""
+def _render_replay_summary(
+    report: ReplaySessionReport,
+    report_path: Path,
+    ui_actions_count: int = 0,
+    ui_deltas: Optional[List[UIDelta]] = None,
+) -> None:
+    """Render a Rich summary table of API and optional UI replay execution results."""
     total = len(report.execution_pairs)
     succeeded = sum(1 for pair in report.execution_pairs if pair.is_success)
     failed = total - succeeded
@@ -68,14 +75,21 @@ def _render_replay_summary(report: ReplaySessionReport, report_path: Path) -> No
     table.add_row("Total Requests", str(total))
     table.add_row("Succeeded", f"[green]{succeeded}[/green]")
     table.add_row("Connection Failures", f"[red]{failed}[/red]" if failed else "0")
+    if ui_deltas is not None:
+        table.add_row("UI Actions Replayed", str(ui_actions_count))
+        table.add_row(
+            "UI Playback Errors",
+            f"[red]{len(ui_deltas)}[/red]" if ui_deltas else "0",
+        )
     table.add_row("Saved Report", str(report_path))
 
     console.print(table)
-    if failed == 0:
+    if failed == 0 and not ui_deltas:
         console.print("[bold green]✔️ Replay completed with 0 connection errors.[/bold green]")
     else:
         console.print(
-            f"[bold yellow]⚠️ Replay completed with {failed} connection failure(s).[/bold yellow]"
+            f"[bold yellow]⚠️ Replay completed with {failed} API failure(s) "
+            f"and {len(ui_deltas or [])} UI error(s).[/bold yellow]"
         )
 
 
@@ -84,18 +98,27 @@ def run_replay_command(
     target: str,
     concurrency: int = 1,
     headers: Optional[List[str]] = None,
+    ui_target: Optional[str] = None,
+    max_retries: Optional[int] = None,
 ) -> None:
-    """Validate inputs, execute the replay runner with progress UI, and print summary.
+    """Validate inputs, execute API (and optional UI) replay, and print summary.
 
     Args:
         recording: Path to a session JSON file or a session ID.
         target: Target service base URL.
         concurrency: Max concurrent requests (1 = sequential).
         headers: Optional list of ``"Name: Value"`` header overrides.
+        ui_target: Optional candidate frontend URL for headless Playwright playback.
+        max_retries: Optional override for transient HTTP retry attempts.
     """
     validated_target = validate_target_url(target)
+    validated_ui_target = validate_target_url(ui_target) if ui_target else None
     header_overrides = parse_header_overrides(headers)
     settings = load_settings()
+
+    effective_retries = max_retries if max_retries is not None else settings.network.max_retries
+    if effective_retries < 0:
+        raise typer.BadParameter("max-retries must be >= 0")
 
     session_store = SessionStore(settings.storage.sessions_dir)
     try:
@@ -113,7 +136,7 @@ def run_replay_command(
     console.print(
         f"[bold cyan]Replaying session[/bold cyan] [bold]{session.session_id}[/bold] "
         f"({total_calls} interaction(s)) against [bold]{validated_target}[/bold] "
-        f"[dim](concurrency={concurrency})[/dim]"
+        f"[dim](concurrency={concurrency}, max_retries={effective_retries})[/dim]"
     )
 
     with Progress(
@@ -141,7 +164,30 @@ def run_replay_command(
             header_overrides=header_overrides,
             session_store=session_store,
             on_progress=_on_progress,
+            max_retries=effective_retries,
+            backoff_factor=settings.network.backoff_factor,
         )
-        report, saved_path = asyncio.run(runner.run(session))
 
-    _render_replay_summary(report, saved_path)
+        async def _execute_all() -> tuple[ReplaySessionReport, Path, Optional[List[UIDelta]]]:
+            if validated_ui_target is not None:
+                ui_replayer = UIActionReplayer(
+                    candidate_url=validated_ui_target,
+                    session=session,
+                )
+                (api_report, saved), ui_errors = await asyncio.gather(
+                    runner.run(session),
+                    ui_replayer.replay_ui_session(),
+                )
+                return api_report, saved, ui_errors
+
+            api_report, saved = await runner.run(session)
+            return api_report, saved, None
+
+        report, saved_path, ui_deltas = asyncio.run(_execute_all())
+
+    _render_replay_summary(
+        report,
+        saved_path,
+        ui_actions_count=len(session.ui_actions),
+        ui_deltas=ui_deltas,
+    )

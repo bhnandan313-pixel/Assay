@@ -26,6 +26,15 @@ class FieldDelta(BaseModel):
     new_value: Optional[Any] = None
 
 
+class UIDelta(BaseModel):
+    """Single DOM or visual regression detected between baseline and candidate UI."""
+
+    selector: str
+    change_type: str
+    expected_state: Optional[str] = None
+    actual_state: Optional[str] = None
+
+
 class InteractionDiff(BaseModel):
     """Differential comparison result for one recorded interaction."""
 
@@ -36,6 +45,7 @@ class InteractionDiff(BaseModel):
     new_status: Optional[int] = None
     body_diffs: List[FieldDelta] = Field(default_factory=list)
     header_diffs: List[FieldDelta] = Field(default_factory=list)
+    ui_diffs: List[UIDelta] = Field(default_factory=list)
     latency_delta_ms: float = 0.0
     error_message: Optional[str] = None
 
@@ -64,4 +74,7 @@ class SessionDiffReport(BaseModel):
     changed_count: int
     failed_count: int
     inconclusive_count: int
+    ui_unchanged_count: int = 0
+    ui_changed_count: int = 0
+    ui_failed_count: int = 0
     deltas: List[InteractionDiff] = Field(default_factory=list)

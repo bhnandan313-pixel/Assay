@@ -1,0 +1,52 @@
+2026-11-25 15:55:29,978 | ERROR    | assay.recorder.proxy | Unexpected error while recording interaction for GET /ping
+Traceback (most recent call last):
+  File "C:\Users\Nandan B H\Assay\Assay\src\assay\recorder\proxy.py", line 258, in _handle_request
+    await self._record_interaction(
+  File "C:\Users\Nandan B H\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py", line 2195, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated recording failure
+2026-11-25 15:55:30,060 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 1/4); retrying in 0.587s
+2026-11-25 15:55:30,665 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 2/4); retrying in 1.067s
+2026-11-25 15:55:31,781 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 3/4); retrying in 2.199s
+2026-11-25 15:55:33,986 | WARNING  | assay.replay.client | Replay received server error for interaction i-504: HTTP 504
+2026-11-25 15:55:33,988 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 1/4): Connection refused; retrying in 0.517s
+2026-11-25 15:55:34,516 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 2/4): Connection refused; retrying in 1.067s
+2026-11-25 15:55:35,600 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 3/4): Connection refused; retrying in 2.140s
+2026-11-25 15:55:37,750 | WARNING  | assay.replay.client | Replay failed for interaction i-conn (GET http://localhost:8001/conn-refused) after 4 attempt(s): ConnectError: Connection refused
+2026-11-25 15:55:38,062 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 1/4): Simulated read timeout; retrying in 0.693s
+2026-11-25 15:55:39,064 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 2/4): Simulated read timeout; retrying in 1.004s
+2026-11-25 15:55:40,378 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 3/4): Simulated read timeout; retrying in 2.011s
+2026-11-25 15:55:42,704 | WARNING  | assay.replay.client | Replay failed for interaction i-hang (GET http://localhost:8001/hang) after 4 attempt(s): ReadTimeout: Simulated read timeout
+2026-11-25 15:55:43,492 | WARNING  | assay.replay.client | Transient HTTP 502 for interaction retry-int-1 (attempt 1/4); retrying in 0.282s
+2026-11-25 15:55:43,493 | WARNING  | assay.replay.client | Transient HTTP 502 for interaction retry-int-1 (attempt 2/4); retrying in 0.531s
+2026-11-25 15:55:43,517 | WARNING  | assay.replay.client | Transient replay error for interaction retry-int-1 (GET http://candidate.local/api/health) (attempt 1/3): timed out; retrying in 0.147s
+2026-11-25 15:55:43,519 | WARNING  | assay.replay.client | Transient replay error for interaction retry-int-1 (GET http://candidate.local/api/health) (attempt 2/3): timed out; retrying in 0.240s
+2026-11-25 15:55:43,519 | WARNING  | assay.replay.client | Replay failed for interaction retry-int-1 (GET http://candidate.local/api/health) after 3 attempt(s): ConnectTimeout: timed out
+2026-11-25 15:55:44,391 | INFO     | assay.browser.replayer | UI replay navigating to http://127.0.0.1:51070/
+2026-11-25 15:55:45,099 | INFO     | assay.browser.replayer | UI replay clicking button#save-btn
+2026-11-25 16:00:35,390 | ERROR    | assay.recorder.proxy | Unexpected error while recording interaction for GET /ping
+Traceback (most recent call last):
+  File "C:\Users\Nandan B H\Assay\Assay\src\assay\recorder\proxy.py", line 258, in _handle_request
+    await self._record_interaction(
+  File "C:\Users\Nandan B H\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py", line 2195, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated recording failure
+2026-11-25 16:00:35,444 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 1/4); retrying in 0.680s
+2026-11-25 16:00:36,130 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 2/4); retrying in 1.025s
+2026-11-25 16:00:37,168 | WARNING  | assay.replay.client | Transient HTTP 504 for interaction i-504 (attempt 3/4); retrying in 2.143s
+2026-11-25 16:00:39,318 | WARNING  | assay.replay.client | Replay received server error for interaction i-504: HTTP 504
+2026-11-25 16:00:39,319 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 1/4): Connection refused; retrying in 0.703s
+2026-11-25 16:00:40,037 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 2/4): Connection refused; retrying in 1.035s
+2026-11-25 16:00:41,083 | WARNING  | assay.replay.client | Transient replay error for interaction i-conn (GET http://localhost:8001/conn-refused) (attempt 3/4): Connection refused; retrying in 2.057s
+2026-11-25 16:00:43,156 | WARNING  | assay.replay.client | Replay failed for interaction i-conn (GET http://localhost:8001/conn-refused) after 4 attempt(s): ConnectError: Connection refused
+2026-11-25 16:00:43,466 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 1/4): Simulated read timeout; retrying in 0.548s
+2026-11-25 16:00:44,339 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 2/4): Simulated read timeout; retrying in 1.002s
+2026-11-25 16:00:45,654 | WARNING  | assay.replay.client | Transient replay error for interaction i-hang (GET http://localhost:8001/hang) (attempt 3/4): Simulated read timeout; retrying in 2.029s
+2026-11-25 16:00:48,006 | WARNING  | assay.replay.client | Replay failed for interaction i-hang (GET http://localhost:8001/hang) after 4 attempt(s): ReadTimeout: Simulated read timeout
+2026-11-25 16:00:48,789 | WARNING  | assay.replay.client | Transient HTTP 502 for interaction retry-int-1 (attempt 1/4); retrying in 0.335s
+2026-11-25 16:00:48,789 | WARNING  | assay.replay.client | Transient HTTP 502 for interaction retry-int-1 (attempt 2/4); retrying in 0.573s
+2026-11-25 16:00:48,814 | WARNING  | assay.replay.client | Transient replay error for interaction retry-int-1 (GET http://candidate.local/api/health) (attempt 1/3): timed out; retrying in 0.107s
+2026-11-25 16:00:48,815 | WARNING  | assay.replay.client | Transient replay error for interaction retry-int-1 (GET http://candidate.local/api/health) (attempt 2/3): timed out; retrying in 0.221s
+2026-11-25 16:00:48,816 | WARNING  | assay.replay.client | Replay failed for interaction retry-int-1 (GET http://candidate.local/api/health) after 3 attempt(s): ConnectTimeout: timed out
+2026-11-25 16:00:49,621 | INFO     | assay.browser.replayer | UI replay navigating to http://127.0.0.1:52314/
+2026-11-25 16:00:50,306 | INFO     | assay.browser.replayer | UI replay clicking button#save-btn

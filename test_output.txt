@@ -1,0 +1,46 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.0, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Nandan B H\Assay\Assay\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Nandan B H\Assay\Assay
+configfile: pyproject.toml
+plugins: anyio-4.16.0, asyncio-1.5.0, mock-3.17.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 29 items
+
+tests/unit/test_attest.py::test_key_generation_and_keystore_roundtrip PASSED [  3%]
+tests/unit/test_attest.py::test_canonical_json_invariance PASSED         [  6%]
+tests/unit/test_attest.py::test_signed_bundle_happy_path_and_cli_verification PASSED [ 10%]
+tests/unit/test_attest.py::test_tamper_detection_catches_manifest_deltas_and_timestamp_mutations PASSED [ 13%]
+tests/unit/test_cli.py::test_cli_help_lists_subcommands PASSED           [ 17%]
+tests/unit/test_cli.py::test_cli_init_invokes_workspace_initialization PASSED [ 20%]
+tests/unit/test_cli.py::test_cli_init_handles_os_error PASSED            [ 24%]
+tests/unit/test_cli.py::test_cli_missing_required_arguments_fail[args0] PASSED [ 27%]
+tests/unit/test_cli.py::test_cli_missing_required_arguments_fail[args1] PASSED [ 31%]
+tests/unit/test_cli.py::test_cli_missing_required_arguments_fail[args2] PASSED [ 34%]
+tests/unit/test_cli.py::test_cli_missing_required_arguments_fail[args3] PASSED [ 37%]
+tests/unit/test_cli.py::test_cli_record_replay_verify_and_recordings_list PASSED [ 41%]
+tests/unit/test_cli.py::test_settings_defaults_and_yaml_override PASSED  [ 44%]
+tests/unit/test_diff.py::test_path_normalizer_and_ignore_patterns PASSED [ 48%]
+tests/unit/test_diff.py::test_comparator_status_and_header_mismatches PASSED [ 51%]
+tests/unit/test_diff.py::test_comparator_nested_json_structural_deltas PASSED [ 55%]
+tests/unit/test_diff.py::test_comparator_exclusion_mask_hides_ignored_fields PASSED [ 58%]
+tests/unit/test_diff.py::test_comparator_detects_type_mismatch PASSED    [ 62%]
+tests/unit/test_diff.py::test_session_comparison_runner_tallies_and_saves_report PASSED [ 65%]
+tests/unit/test_recorder.py::test_redactor_headers_case_insensitive PASSED [ 68%]
+tests/unit/test_recorder.py::test_redactor_nested_json_and_form_bodies PASSED [ 72%]
+tests/unit/test_recorder.py::test_redactor_handles_malformed_json_gracefully PASSED [ 75%]
+tests/unit/test_recorder.py::test_decode_body_bytes_handles_binary_payload PASSED [ 79%]
+tests/unit/test_recorder.py::test_session_store_save_load_export_import PASSED [ 82%]
+tests/unit/test_recorder.py::test_proxy_records_and_redacts_live_http_traffic PASSED [ 86%]
+tests/unit/test_recorder.py::test_proxy_returns_response_even_if_recording_fails PASSED [ 89%]
+tests/unit/test_replay.py::test_replay_client_reconstructs_request_with_fidelity PASSED [ 93%]
+tests/unit/test_replay.py::test_replay_runner_recovers_from_errors_and_continues PASSED [ 96%]
+tests/unit/test_replay.py::test_replay_runner_concurrency_speedup_and_order PASSED [100%]
+
+============================= 29 passed in 4.21s ==============================
+C:\Users\Nandan B H\Assay\Assay\.venv\Lib\site-packages\pytest_asyncio\plugin.py:306: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session". Set it to "fixture-scope" to keep the current behavior.
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+
+Return code: 0

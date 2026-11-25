@@ -34,6 +34,8 @@ class ReplayRunner:
         session_store: Optional[SessionStore] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
         on_progress: Optional[ProgressCallback] = None,
+        max_retries: int = 3,
+        backoff_factor: float = 0.5,
     ) -> None:
         """Initialize the replay runner.
 
@@ -47,6 +49,8 @@ class ReplayRunner:
             session_store: Optional ``SessionStore`` instance.
             transport: Optional custom httpx transport for testing.
             on_progress: Optional callback ``(pair, completed_count, total_count)``.
+            max_retries: Maximum retry attempts on transient errors.
+            backoff_factor: Base exponential backoff factor in seconds.
         """
         if concurrency < 1:
             raise ValueError("concurrency must be >= 1")
@@ -60,6 +64,8 @@ class ReplayRunner:
         self.session_store = session_store or SessionStore(self.sessions_dir)
         self._transport = transport
         self.on_progress = on_progress
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
 
     def _load_session(
         self,
@@ -154,6 +160,8 @@ class ReplayRunner:
             max_connections=max(self.concurrency * 2, 20),
             header_overrides=self.header_overrides,
             transport=self._transport,
+            max_retries=self.max_retries,
+            backoff_factor=self.backoff_factor,
         ) as client:
             if self.concurrency == 1:
                 pairs = await self._run_sequential(client, session.interactions)

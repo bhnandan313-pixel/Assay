@@ -99,6 +99,8 @@ def test_cli_record_replay_verify_and_recordings_list(
         target="http://127.0.0.1:8000",
         port=9090,
         session_id=None,
+        ui_url=None,
+        browser="chromium",
     )
 
     list_res = runner.invoke(app, ["recordings", "list"])
@@ -125,6 +127,8 @@ def test_cli_record_replay_verify_and_recordings_list(
         target="http://127.0.0.1:8000",
         concurrency=4,
         headers=["Authorization: Bearer fresh"],
+        ui_target=None,
+        max_retries=None,
     )
 
     verify_res = runner.invoke(

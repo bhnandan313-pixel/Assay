@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import time
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -19,6 +21,8 @@ from assay.models.recording import (
 from assay.models.replay import ReplayExecutionPair
 
 logger = logging.getLogger(__name__)
+
+TRANSIENT_STATUS_CODES: frozenset[int] = frozenset({502, 503, 504})
 
 STRIPPED_REPLAY_HEADERS: frozenset[str] = frozenset(
     {
@@ -60,6 +64,8 @@ class ReplayClient:
         max_connections: int = 100,
         header_overrides: Optional[Dict[str, str]] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        max_retries: int = 3,
+        backoff_factor: float = 0.5,
     ) -> None:
         """Initialize the replay HTTP client.
 
@@ -70,15 +76,32 @@ class ReplayClient:
             max_connections: Maximum total concurrent connections.
             header_overrides: Optional mapping of header names to override values.
             transport: Optional custom httpx transport (useful for testing).
+            max_retries: Maximum retry attempts on transient network or 502/503/504 errors.
+            backoff_factor: Base exponential backoff factor in seconds.
         """
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        if backoff_factor < 0.0:
+            raise ValueError("backoff_factor must be >= 0.0")
+
         self.target_base_url = target_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.max_keepalive_connections = max_keepalive_connections
         self.max_connections = max_connections
         self.header_overrides: Dict[str, str] = dict(header_overrides or {})
         self._transport = transport
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
         self._client: Optional[httpx.AsyncClient] = None
         self._owns_client: bool = False
+
+    def _compute_backoff_delay(self, attempt: int) -> float:
+        """Compute exponential backoff duration with randomized jitter."""
+        if self.backoff_factor <= 0.0:
+            return 0.0
+        base_delay = self.backoff_factor * (2**attempt)
+        jitter = random.uniform(0.0, self.backoff_factor * 0.5)
+        return base_delay + jitter
 
     def _create_client(self) -> httpx.AsyncClient:
         """Instantiate an ``httpx.AsyncClient`` with configured limits and timeouts."""
@@ -167,91 +190,132 @@ class ReplayClient:
 
         start_time = time.perf_counter()
         try:
-            response = await client.request(
-                method=interaction.request.method,
-                url=target_url,
-                params=params,
-                headers=headers,
-                content=body_bytes,
-            )
-            elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
-            replayed_at = datetime.now(timezone.utc)
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await client.request(
+                        method=interaction.request.method,
+                        url=target_url,
+                        params=params,
+                        headers=headers,
+                        content=body_bytes,
+                    )
+                    elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
+                    replayed_at = datetime.now(timezone.utc)
 
-            resp_headers = [
-                HTTPHeader(name=k, value=v) for k, v in response.headers.multi_items()
-            ]
-            resp_content_type = response.headers.get("content-type")
-            decoded_body = decode_body_bytes(response.content, resp_content_type)
+                    if (
+                        response.status_code in TRANSIENT_STATUS_CODES
+                        and attempt < self.max_retries
+                    ):
+                        delay = self._compute_backoff_delay(attempt)
+                        logger.warning(
+                            "Transient HTTP %s for interaction %s (attempt %d/%d); "
+                            "retrying in %.3fs",
+                            response.status_code,
+                            interaction.interaction_id,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
 
-            replayed_response = RecordedResponse(
-                status_code=response.status_code,
-                headers=resp_headers,
-                body=decoded_body,
-                content_type=resp_content_type,
-                elapsed_ms=elapsed_ms,
-            )
-            server_error = response.status_code >= 500
-            error_message = (
-                f"HTTPStatusError: server returned HTTP {response.status_code}"
-                if server_error
-                else None
-            )
-            if server_error:
-                logger.warning(
-                    "Replay received server error for interaction %s: HTTP %s",
-                    interaction.interaction_id,
-                    response.status_code,
-                )
-            return ReplayExecutionPair(
-                interaction_id=interaction.interaction_id,
-                recorded_at=interaction.recorded_at,
-                request=interaction.request,
-                original_response=interaction.response,
-                replayed_response=replayed_response,
-                replayed_at=replayed_at,
-                duration_ms=elapsed_ms,
-                error_message=error_message,
-                is_success=not server_error,
-            )
-        except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError, OSError) as exc:
-            elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
-            error_detail = f"{type(exc).__name__}: {exc}"
-            logger.warning(
-                "Replay failed for interaction %s (%s %s): %s",
-                interaction.interaction_id,
-                interaction.request.method,
-                target_url,
-                error_detail,
-            )
-            return ReplayExecutionPair(
-                interaction_id=interaction.interaction_id,
-                recorded_at=interaction.recorded_at,
-                request=interaction.request,
-                original_response=interaction.response,
-                replayed_response=None,
-                replayed_at=datetime.now(timezone.utc),
-                duration_ms=elapsed_ms,
-                error_message=error_detail,
-                is_success=False,
-            )
-        except Exception as exc:
-            elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
-            error_detail = f"{type(exc).__name__}: {exc}"
-            logger.exception(
-                "Unexpected error replaying interaction %s",
-                interaction.interaction_id,
-            )
-            return ReplayExecutionPair(
-                interaction_id=interaction.interaction_id,
-                recorded_at=interaction.recorded_at,
-                request=interaction.request,
-                original_response=interaction.response,
-                replayed_response=None,
-                replayed_at=datetime.now(timezone.utc),
-                duration_ms=elapsed_ms,
-                error_message=error_detail,
-                is_success=False,
-            )
+                    resp_headers = [
+                        HTTPHeader(name=k, value=v) for k, v in response.headers.multi_items()
+                    ]
+                    resp_content_type = response.headers.get("content-type")
+                    decoded_body = decode_body_bytes(response.content, resp_content_type)
+
+                    replayed_response = RecordedResponse(
+                        status_code=response.status_code,
+                        headers=resp_headers,
+                        body=decoded_body,
+                        content_type=resp_content_type,
+                        elapsed_ms=elapsed_ms,
+                    )
+                    server_error = response.status_code >= 500
+                    error_message = (
+                        f"HTTPStatusError: server returned HTTP {response.status_code}"
+                        if server_error
+                        else None
+                    )
+                    if server_error:
+                        logger.warning(
+                            "Replay received server error for interaction %s: HTTP %s",
+                            interaction.interaction_id,
+                            response.status_code,
+                        )
+                    return ReplayExecutionPair(
+                        interaction_id=interaction.interaction_id,
+                        recorded_at=interaction.recorded_at,
+                        request=interaction.request,
+                        original_response=interaction.response,
+                        replayed_response=replayed_response,
+                        replayed_at=replayed_at,
+                        duration_ms=elapsed_ms,
+                        error_message=error_message,
+                        is_success=not server_error,
+                    )
+                except (
+                    httpx.TimeoutException,
+                    httpx.NetworkError,
+                    httpx.HTTPError,
+                    OSError,
+                ) as exc:
+                    if attempt < self.max_retries:
+                        delay = self._compute_backoff_delay(attempt)
+                        logger.warning(
+                            "Transient replay error for interaction %s (%s %s) "
+                            "(attempt %d/%d): %s; retrying in %.3fs",
+                            interaction.interaction_id,
+                            interaction.request.method,
+                            target_url,
+                            attempt + 1,
+                            self.max_retries + 1,
+                            exc,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
+                    error_detail = f"{type(exc).__name__}: {exc}"
+                    logger.warning(
+                        "Replay failed for interaction %s (%s %s) after %d attempt(s): %s",
+                        interaction.interaction_id,
+                        interaction.request.method,
+                        target_url,
+                        attempt + 1,
+                        error_detail,
+                    )
+                    return ReplayExecutionPair(
+                        interaction_id=interaction.interaction_id,
+                        recorded_at=interaction.recorded_at,
+                        request=interaction.request,
+                        original_response=interaction.response,
+                        replayed_response=None,
+                        replayed_at=datetime.now(timezone.utc),
+                        duration_ms=elapsed_ms,
+                        error_message=error_detail,
+                        is_success=False,
+                    )
+                except Exception as exc:
+                    elapsed_ms = max((time.perf_counter() - start_time) * 1000.0, 0.0001)
+                    error_detail = f"{type(exc).__name__}: {exc}"
+                    logger.exception(
+                        "Unexpected error replaying interaction %s",
+                        interaction.interaction_id,
+                    )
+                    return ReplayExecutionPair(
+                        interaction_id=interaction.interaction_id,
+                        recorded_at=interaction.recorded_at,
+                        request=interaction.request,
+                        original_response=interaction.response,
+                        replayed_response=None,
+                        replayed_at=datetime.now(timezone.utc),
+                        duration_ms=elapsed_ms,
+                        error_message=error_detail,
+                        is_success=False,
+                    )
         finally:
             if created_ephemeral:
                 await client.aclose()

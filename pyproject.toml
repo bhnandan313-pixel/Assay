@@ -29,7 +29,8 @@ dependencies = [
     "deepdiff>=6.7.0",
     "cryptography>=42.0.0",
     "rich>=13.7.0",
-    "pyyaml>=6.0.1"
+    "pyyaml>=6.0.1",
+    "playwright>=1.42.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +53,11 @@ assay = "assay.cli.main:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/assay"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py311"

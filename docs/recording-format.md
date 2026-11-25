@@ -1,31 +1,78 @@
-# Recording Format & Redaction Specification
+# Recording Format (v2.0.0)
 
-Assay persists captured HTTP workloads as versioned JSON documents in `.assay/sessions/session_<session_id>.json` using atomic temp-file writes (`os.replace`) guarded by a thread lock.
+Assay stores each verification run as a **single JSON document** that captures both frontend UI actions and backend API interactions. The format is versioned (currently `2.0.0`) to allow forward‑compatible extensions.
 
-## Schema (`version: "1.0.0"`)
+## Top‑Level Structure
+```json
+{
+  "schema_version": "2.0.0",
+  "metadata": {
+    "recorded_at": "2026-11-25T15:32:10Z",
+    "environment": {
+      "os": "windows",
+      "python_version": "3.12",
+      "playwright_version": "1.42.0",
+      "assay_version": "0.9.0"
+    },
+    "trace_id": "a1b2c3d4-e5f6-7g8h-9i10-j11k12l13m14"
+  },
+  "ui_actions": [
+    {
+      "action_id": "ui-1",
+      "type": "click",
+      "selector": "#login-button",
+      "timestamp": "2026-11-25T15:32:12.345Z",
+      "trace_id": "a1b2c3d4-e5f6-7g8h-9i10-j11k12l13m14"
+    },
+    {
+      "action_id": "ui-2",
+      "type": "navigate",
+      "url": "http://localhost:8000/dashboard",
+      "timestamp": "2026-11-25T15:32:13.210Z",
+      "trace_id": "d4e5f6g7-h8i9-j10k-11l12-m13n14o15p16"
+    }
+  ],
+  "network_interactions": [
+    {
+      "request_id": "req-1",
+      "method": "GET",
+      "url": "http://localhost:8000/api/user",
+      "status_code": 200,
+      "request_headers": {
+        "Accept": "application/json",
+        "X-Assay-Trace-ID": "a1b2c3d4-e5f6-7g8h-9i10-j11k12l13m14"
+      },
+      "response_headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      "response_body": {
+        "id": 42,
+        "username": "alice",
+        "created_at": "2026-11-25T15:30:00Z"
+      },
+      "timestamp": "2026-11-25T15:32:12.560Z"
+    }
+  ]
+}
+```
 
-A `RecordingSession` contains:
-- `version`: Schema version string (`"1.0.0"`).
-- `session_id`: Unique session identifier.
-- `target_url`: Original upstream URL targeted during capture.
-- `created_at`: UTC ISO-8601 timestamp.
-- `interactions`: Ordered list of `RecordedInteraction` objects.
+## Fields Description
+| Field | Type | Description |
+|-------|------|-------------|
+| `schema_version` | string | Must be `2.0.0` for this release. |
+| `metadata` | object | Capture of run‑time environment and a top‑level `trace_id` that groups the whole session. |
+| `ui_actions` | array | Ordered list of UI interactions recorded by Playwright. Each entry includes a `trace_id` that matches the corresponding network request(s). |
+| `network_interactions` | array | Detailed HTTP request/response pairs observed by the Assay proxy. The `X‑Assay‑Trace‑ID` header links back to UI actions. |
 
-Each `RecordedInteraction` pairs:
-- `interaction_id`: UUIDv4 string.
-- `recorded_at`: UTC ISO-8601 timestamp.
-- `request` (`RecordedRequest`): `method`, `url`, `path`, `query_params`, `headers` (`[{name, value}]`), `body`, `content_type`.
-- `response` (`RecordedResponse`): `status_code`, `headers`, `body`, `content_type`, `elapsed_ms`.
+### Ignorable Dynamic Fields
+When diffing recordings, these fields are typically **ignored** because they are expected to change on each run:
+- `metadata.recorded_at`
+- `ui_actions.timestamp`
+- `network_interactions.timestamp`
+- Any UUID‑style identifiers (`trace_id`, `action_id`, `request_id`).
 
-### Binary & Non-UTF-8 Bodies
+The diff engine accepts a **JSONPath filter list** to automatically drop these fields before comparison.
 
-Empty bodies are stored as `null`. Text payloads are decoded using the response/request charset (defaulting to UTF-8). Non-UTF-8 binary payloads are encoded losslessly as `<binary:hex:<hex_digits>>` and decoded back to raw bytes during replay.
-
-## Redaction Rules
-
-Before any interaction is stored in memory or flushed to disk, `Redactor` scrubs sensitive data using the configured field list in `.assay.yaml` (defaulting to `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, `password`, `secret`, `token`, `credit_card`, `cvv`, and `number`):
-
-1. **Headers:** Matched case-insensitively; values are replaced with `"[REDACTED]"`.
-2. **JSON Bodies (`application/json` / `*+json`):** Parsed and walked recursively across nested objects and arrays; matching keys (case-insensitive) have their values replaced with `"[REDACTED]"`.
-3. **Form Bodies (`application/x-www-form-urlencoded`):** Parsed via `parse_qsl`; matching parameter keys have their values replaced with `"[REDACTED]"`.
-4. **Fallback:** Malformed or unstructured bodies are returned unchanged so capture never fails on invalid payloads.
+---
+*The format is deliberately extensible – future versions may add `visual_snapshots`, `performance_metrics`, or `custom_metrics` without breaking existing tools.*

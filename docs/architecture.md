@@ -1,33 +1,38 @@
-# Assay Architecture
+# Architecture Overview
 
-Assay is structured around four decoupled, black-box verification subsystems connected by versioned Pydantic v2 data contracts.
+Assay provides end‑to‑end behavioral verification by stitching together **frontend UI actions** and **backend API interactions** through a lightweight proxy. The architecture consists of the following core components:
 
-## Subsystem Overview
+1. **Assay Proxy** – an HTTP proxy that injects a unique `X‑Assay‑Trace‑ID` header into every request/response pair. This header enables correlation of UI events captured by Playwright with the corresponding backend calls.
+2. **Playwright Recorder** – runs a Chromium browser instance, records user interactions (clicks, navigation, form inputs) and forwards the trace data to the proxy.
+3. **Recording Store** – persisted JSON files that capture a full session: UI actions, network interactions, timestamps, and the injected trace identifiers.
+4. **Differential Engine** – consumes two recordings (baseline & candidate) and performs:
+   * **API Diff** – status‑code comparison, header diffing (with ignore filters), and deep JSON structural diff using `deepdiff`.
+   * **UI Diff** – route changes, DOM element presence/absence, page title variations, and visual screenshot diffs (optional).
+5. **Evidence Generator** – assembles a canonical JSON bundle containing the diff report, execution statistics, and configuration metadata. The bundle is cryptographically signed with Ed25519, producing a tamper‑evident attestation.
+6. **CLI (`assay`)** – orchestrates the workflow: `record`, `replay`, `verify`, and `verify‑attestation` commands.
 
-```text
-RecordingSession ──► ReplayRunner ──► ReplaySessionReport (Baseline & Candidate)
-                                                │
-                                                ▼
-EvidenceBundle ◄── EvidenceGenerator ◄── SessionComparisonRunner
+```
++-------------------+   +-------------------+   +-------------------+
+|   Baseline App   |   |   Candidate App   |   |   Assay Proxy     |
+|  (v1 – healthy)  |   | (v2 – buggy)      |   | (inject Trace‑ID) |
++--------+----------+   +--------+----------+   +--------+----------+
+         |                       |                     |
+         |  HTTP traffic (with  |  HTTP traffic (with |
+         |   Trace‑ID header)   |   Trace‑ID header)  |
+         v                       v                     v
+   +-------------------+   +-------------------+   +-------------------+
+   |   Playwright      |   |   Playwright      |   |   Diff Engine     |
+   |   Recorder        |   |   Replayer        |   |   (API + UI)      |
+   +-------------------+   +-------------------+   +-------------------+
 ```
 
-### 1. Recorder Proxy (`src/assay/recorder/`)
-- **Implementation:** `RecordingProxyServer` (`aiohttp.web` + `aiohttp.ClientSession`).
-- **Behavior:** Accepts inbound HTTP traffic on a local port (`127.0.0.1:9000` by default), forwards requests to the upstream target without hop-by-hop headers, measures `elapsed_ms` via `time.perf_counter()`, and passes captured metadata through `Redactor` before appending to `RecordingSession`.
-- **Resilience:** Client responses are always returned unredacted, even if background recording encounters an unexpected exception.
+**Data Flow**
+1. The **Recorder** launches a browser against the **Baseline App** through the **Proxy**. UI actions are logged and each outgoing HTTP request receives a `X‑Assay‑Trace‑ID`.
+2. The **Proxy** forwards traffic to the app and logs the corresponding responses, storing the trace ID alongside the request/response metadata.
+3. The complete session is saved as a JSON file (`recordings/*.json`).
+4. Replaying the **Candidate App** follows the same steps, generating a second recording.
+5. The **Diff Engine** loads both recordings, correlates actions via the trace IDs, and produces a structured diff report.
+6. The **Evidence Generator** signs the report, yielding an attestation that can be independently verified.
 
-### 2. Replay Client & Runner (`src/assay/replay/`)
-- **Implementation:** `ReplayClient` (`httpx.AsyncClient`) and `ReplayRunner`.
-- **Behavior:** Loads a `RecordingSession` via `SessionStore`, strips conflicting hop-by-hop headers (`Host`, `Content-Length`, `Transfer-Encoding`), applies optional dynamic header overrides, and dispatches requests either sequentially (`concurrency=1`) or concurrently (`asyncio.Semaphore` + `asyncio.gather`).
-- **Data Contract:** Produces `ReplayExecutionPair` items aggregated into a `ReplaySessionReport` saved under `.assay/replays/`. Network timeouts and connection failures set `is_success=False` with `error_message` without aborting the queue.
-
-### 3. Differential Comparator (`src/assay/diff/`)
-- **Implementation:** `DifferentialComparator`, `SessionComparisonRunner`, and `normalizer.py`.
-- **Behavior:** Compares baseline and candidate `ReplayExecutionPair`s:
-  - Evaluates HTTP status codes and configured headers (`Content-Type`, `Cache-Control`).
-  - Performs structural JSON diffing via `deepdiff.DeepDiff`, normalizing paths (`root['user']['age']` → `$.user.age`) and filtering out dynamic fields matching `ignore_paths`.
-  - Classifies each interaction as `UNCHANGED`, `CHANGED`, `FAILED`, or `INCONCLUSIVE` in a `SessionDiffReport` saved under `.assay/verifications/`.
-
-### 4. Attestation Signer & Evidence Packager (`src/assay/attest/`)
-- **Implementation:** `KeyStore`, `sign_manifest`, `verify_manifest`, and `EvidenceGenerator`.
-- **Behavior:** Computes a deterministic SHA-256 digest (`deltas_hash_sha256`) over sorted, canonicalized `InteractionDiff` objects, constructs an `EvidenceManifest`, signs its canonical UTF-8 JSON bytes with Ed25519, and persists `evidence_<verification_id>.json` under `.assay/evidence/`.
+---
+*The architecture is deliberately minimalistic to keep the runtime lightweight while still providing deep end‑to‑end visibility.*
