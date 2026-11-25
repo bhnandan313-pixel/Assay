@@ -16,7 +16,9 @@ import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+
+import os
 
 # Local imports – the core command helpers live in ``assay.cli``
 from assay.cli.commands_record import run_record_command
@@ -39,7 +41,8 @@ if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Jinja2 template loader
-templates = Jinja2Templates(directory=TEMPLATE_DIR)
+# Jinja2 template loader removed; we'll serve raw HTML
+# templates = Jinja2Templates(directory=TEMPLATE_DIR)
 
 # ---------------------------------------------------------------------------
 # Helper utilities
@@ -151,9 +154,17 @@ def update_redaction_rules(keys: List[str]) -> JSONResponse:
 # UI route
 # ---------------------------------------------------------------------------
 @app.get("/")
-def ui_root(request: Request) -> JSONResponse:
-    """Render the main dashboard page using Jinja2."""
-    return templates.TemplateResponse("index.html", {"request": request})
+def ui_root(request: Request) -> HTMLResponse:
+    """Serve the main dashboard HTML file directly.
+
+    This avoids requiring Jinja2; the static HTML file is read from the
+    TEMPLATE_DIR and returned as an HTMLResponse.
+    """
+    index_path = TEMPLATE_DIR / "index.html"
+    if not index_path.is_file():
+        raise HTTPException(status_code=404, detail="Dashboard template not found")
+    content = index_path.read_text(encoding="utf-8")
+    return HTMLResponse(content=content, media_type="text/html")
 
 # ---------------------------------------------------------------------------
 # Server entrypoint
