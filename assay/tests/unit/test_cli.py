@@ -89,6 +89,7 @@ def test_cli_record_replay_verify_and_recordings_list(
     mocker.patch("assay.cli.main.load_settings", return_value=settings)
     mock_record = mocker.patch("assay.cli.main.run_record_command")
     mock_replay = mocker.patch("assay.cli.main.run_replay_command")
+    mock_verify = mocker.patch("assay.cli.main.run_verify_command")
 
     record_res = runner.invoke(
         app, ["record", "--target", "http://127.0.0.1:8000", "--port", "9090"]
@@ -136,9 +137,18 @@ def test_cli_record_replay_verify_and_recordings_list(
             "http://127.0.0.1:8001",
             "--candidate",
             "http://127.0.0.1:8002",
+            "--ignore-path",
+            "$.created_at,$.id",
         ],
     )
     assert verify_res.exit_code == 0
+    mock_verify.assert_called_once_with(
+        recording="sample.json",
+        baseline="http://127.0.0.1:8001",
+        candidate="http://127.0.0.1:8002",
+        ignore_path="$.created_at,$.id",
+        concurrency=1,
+    )
 
 
 def test_settings_defaults_and_yaml_override(tmp_path: Path) -> None:

@@ -14,6 +14,7 @@ from rich.table import Table
 
 from assay.cli.commands_record import run_record_command
 from assay.cli.commands_replay import run_replay_command
+from assay.cli.commands_verify import run_verify_command
 from assay.config.settings import (
     DEFAULT_CONFIG_FILENAME,
     AssaySettings,
@@ -231,11 +232,11 @@ def replay(
 
 @app.command()
 def verify(
-    recording: Path = typer.Option(
+    recording: str = typer.Option(
         ...,
         "--recording",
         "-r",
-        help="Path to the recorded JSON workload session.",
+        help="Path or session ID of the recorded JSON workload session.",
     ),
     baseline: str = typer.Option(
         ...,
@@ -249,19 +250,26 @@ def verify(
         "-c",
         help="Candidate service URL to verify against the baseline.",
     ),
+    ignore_path: Optional[str] = typer.Option(
+        None,
+        "--ignore-path",
+        "-i",
+        help="Comma-separated JSONPath fields to ignore (e.g. '$.created_at,$.session_id').",
+    ),
+    concurrency: int = typer.Option(
+        1,
+        "--concurrency",
+        min=1,
+        help="Maximum concurrent replay requests (1 = sequential).",
+    ),
 ) -> None:
     """Run replay, diff comparison, and attestation between baseline and candidate."""
-    console.print("[bold cyan]Assay Verification Pipeline[/bold cyan]")
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Stage", style="cyan")
-    table.add_column("Target / Input", style="white")
-    table.add_row("Recording", str(recording))
-    table.add_row("Baseline", baseline)
-    table.add_row("Candidate", candidate)
-    console.print(table)
-    console.print(
-        "[bold green]✔️ Verification pipeline staged[/bold green] "
-        "[yellow](skeleton mode in Milestone 1).[/yellow]"
+    run_verify_command(
+        recording=recording,
+        baseline=baseline,
+        candidate=candidate,
+        ignore_path=ignore_path,
+        concurrency=concurrency,
     )
 
 
